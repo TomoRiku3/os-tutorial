@@ -1,18 +1,18 @@
 ; Identical to lesson 13's boot sector, but the %included files have new paths
-[org 0x7c00]
-KERNEL_OFFSET equ 0x1000 ; The same one we used when linking the kernel
+[org 0x7c00] ; Recall that BIOS always loads the bootloader to address 0x6c00 in RAM so any use of memory needs to be relative to this offset
+KERNEL_OFFSET equ 0x1000 ; The same one we used when linking the kernel. It is where we are going to load our kernel
 
-    mov [BOOT_DRIVE], dl ; Remember that the BIOS sets us the boot drive in 'dl' on boot
-    mov bp, 0x9000
-    mov sp, bp
+    mov [BOOT_DRIVE], dl ; Remember that the BIOS sets us the boot drive in 'dl' on boot telling us which drive it booted from. Other code might overwrite DL, so you preserve it.
+    mov bp, 0x9000 ; starting the stack well beyond our bootloader 0x7c00 and our kernel 0x1000
+    mov sp, bp ; SP pointing at where the stack starts
 
-    mov bx, MSG_REAL_MODE 
-    call print
+    mov bx, MSG_REAL_MODE ; print function expects the string address in BX
+    call print 
     call print_nl
 
     call load_kernel ; read the kernel from disk
     call switch_to_pm ; disable interrupts, load GDT,  etc. Finally jumps to 'BEGIN_PM'
-    jmp $ ; Never executed
+    jmp $ ; Infinite loop ($ means "current address", so it jumps to itself forever) Never executed If switch_to_pm works correctly, it jumps to 32-bit code and never returns here. 
 
 %include "boot/print.asm"
 %include "boot/print_hex.asm"
@@ -28,8 +28,8 @@ load_kernel:
     call print_nl
 
     mov bx, KERNEL_OFFSET ; Read from disk and store in 0x1000
-    mov dh, 16 ; Our future kernel will be larger, make this big
-    mov dl, [BOOT_DRIVE]
+    mov dh, 16 ; Our future kernel will be larger, make this big. This specifies HOW MANY sectors to read from disk
+    mov dl, [BOOT_DRIVE] ; The disk read BIOS interrupt (INT 13h) needs to know WHICH drive to read from, and it expects the drive number in DL
     call disk_load
     ret
 
@@ -49,3 +49,11 @@ MSG_LOAD_KERNEL db "Loading kernel into memory", 0
 ; padding
 times 510 - ($-$$) db 0
 dw 0xaa55
+
+; difference between equ and db
+; equ declares a symbolic constant so whenver a variable declared using equ
+; appears in the code, the compiler replaces it with its value
+; when db is used, the compiler compiles to data in the binary files
+; when vars declared with db appears in the code, its a memory address to a RAM
+; With equ: Can only store simple numbers
+; With db: Can store strings, arrays, any data of any size
